@@ -1,0 +1,7 @@
+{
+  "name": "Copy of IB Mastery Hub",
+  "description": "IB Mastery Hub — Study. Reflect. Level Up. Your AI-powered companion for the International Baccalaureate.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
