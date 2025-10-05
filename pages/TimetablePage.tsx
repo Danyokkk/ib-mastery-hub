@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MOCK_TIMETABLE_EVENTS } from '../constants';
 import { TimetableEvent } from '../types';
 import { getWeekDays, isSameDay, formatTime, getEventColor } from '../lib/dateUtils';
@@ -6,13 +6,31 @@ import Button from '../components/shared/Button';
 import { PlusIcon } from '../components/IconComponents';
 import AddEventModal from '../components/timetable/AddEventModal';
 
+const CALENDAR_START_HOUR = 7;
+const CALENDAR_END_HOUR = 22;
+const HOUR_HEIGHT_PX = 60;
+
 const TimetablePage: React.FC = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [events, setEvents] = useState<TimetableEvent[]>(MOCK_TIMETABLE_EVENTS);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     const weekDays = getWeekDays(currentDate);
     const today = new Date();
+    const hours = Array.from({ length: CALENDAR_END_HOUR - CALENDAR_START_HOUR }, (_, i) => i + CALENDAR_START_HOUR);
+
+    // Scroll to current time on initial load if viewing the current week
+    useEffect(() => {
+        if (scrollRef.current && weekDays.some(day => isSameDay(day, today))) {
+            const currentHour = new Date().getHours();
+            if (currentHour >= CALENDAR_START_HOUR && currentHour <= CALENDAR_END_HOUR) {
+                // Position halfway through the current hour for better visibility
+                const scrollTop = (currentHour - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX - (HOUR_HEIGHT_PX / 2);
+                scrollRef.current.scrollTop = scrollTop;
+            }
+        }
+    }, [weekDays]);
 
     const changeWeek = (offset: number) => {
         setCurrentDate(prev => {
@@ -23,7 +41,8 @@ const TimetablePage: React.FC = () => {
     };
     
     const eventsForDay = (day: Date) => {
-        return events.filter(event => isSameDay(new Date(event.start), day))
+        return events
+            .filter(event => isSameDay(new Date(event.start), day))
             .sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
     }
 
@@ -33,7 +52,7 @@ const TimetablePage: React.FC = () => {
             id: `evt-${Date.now()}`,
             completed: false,
         };
-        setEvents(prev => [...prev, fullEvent]);
+        setEvents(prev => [...prev, fullEvent].sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
         setIsModalOpen(false);
     };
 
@@ -64,21 +83,62 @@ const TimetablePage: React.FC = () => {
           <Button onClick={() => changeWeek(1)} size="sm" variant="secondary">Next Week &gt;</Button>
         </div>
         
-        <div className="flex-grow overflow-auto">
-            <div className="grid grid-cols-7 gap-1 sm:gap-2 min-w-[500px]">
+        <div className="flex-grow overflow-auto" ref={scrollRef}>
+            <div className="grid grid-cols-[auto_repeat(7,1fr)]">
+                {/* Day Header Row */}
+                <div className="w-14 sticky top-0 bg-white z-10" />
                 {weekDays.map(day => (
-                    <div key={day.toISOString()} className={`rounded-lg p-2 ${isSameDay(day, today) ? 'bg-secondary/10' : 'bg-slate-50'}`}>
-                        <div className="text-center mb-2">
-                            <p className="text-xs text-slate-500 font-semibold">{day.toLocaleDateString('en-US', { weekday: 'short' })}</p>
-                            <p className={`font-bold text-lg ${isSameDay(day, today) ? 'text-secondary' : 'text-text-neutral'}`}>{day.getDate()}</p>
+                    <div key={day.toISOString()} className={`text-center p-2 border-b sticky top-0 bg-white z-10 ${isSameDay(day, today) ? 'border-secondary' : 'border-slate-200'}`}>
+                        <p className="text-xs text-slate-500 font-semibold">{day.toLocaleDateString('en-US', { weekday: 'short' })}</p>
+                        <p className={`font-bold text-lg ${isSameDay(day, today) ? 'text-secondary' : 'text-text-neutral'}`}>{day.getDate()}</p>
+                    </div>
+                ))}
+
+                {/* Time Labels Column */}
+                <div className="row-start-2">
+                    {hours.map(hour => (
+                        <div key={hour} className="h-[60px] text-right pr-2 text-xs text-slate-400 relative">
+                            <span className="absolute -top-[9px]">{hour}:00</span>
                         </div>
-                        <div className="space-y-2">
-                            {eventsForDay(day).map(event => (
-                                <div key={event.id} className={`p-2 rounded-lg text-white text-xs cursor-pointer ${getEventColor(event.type)}`}>
-                                    <p className="font-bold truncate">{event.title}</p>
-                                    <p className="text-white/80">{formatTime(new Date(event.start))}</p>
-                                </div>
-                            ))}
+                    ))}
+                </div>
+
+                {/* Day Columns for Grid Lines and Events */}
+                {weekDays.map(day => (
+                    <div key={day.toISOString()} className="relative border-l border-slate-100 row-start-2">
+                        {/* Background grid lines */}
+                        {hours.map(hour => <div key={hour} className="h-[60px] border-t border-slate-100"></div>)}
+                        
+                        {/* Events */}
+                        <div className="absolute inset-0">
+                            {eventsForDay(day).map(event => {
+                                const start = new Date(event.start);
+                                let end = new Date(event.end);
+                                if (end <= start) {
+                                    end = new Date(start.getTime() + 60 * 60 * 1000); // Default to 1 hour
+                                }
+
+                                const startHour = start.getHours() + start.getMinutes() / 60;
+                                const endHour = end.getHours() + end.getMinutes() / 60;
+
+                                if (endHour <= CALENDAR_START_HOUR || startHour >= CALENDAR_END_HOUR) return null;
+
+                                const top = Math.max(0, startHour - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
+                                const duration = endHour - startHour;
+                                const height = duration * HOUR_HEIGHT_PX;
+
+                                return (
+                                    <div
+                                        key={event.id}
+                                        style={{ top: `${top}px`, height: `${height}px` }}
+                                        className={`absolute left-1 right-1 p-1 rounded text-white text-[10px] cursor-pointer flex flex-col overflow-hidden ${getEventColor(event.type)}`}
+                                        title={`${event.title} (${formatTime(start)} - ${formatTime(end)})`}
+                                    >
+                                        <p className="font-bold truncate">{event.title}</p>
+                                        <p className="text-white/80">{formatTime(start)} - {formatTime(end)}</p>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 ))}

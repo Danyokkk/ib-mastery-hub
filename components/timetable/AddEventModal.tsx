@@ -13,6 +13,8 @@ interface AddEventModalProps {
 const AddEventModal: React.FC<AddEventModalProps> = ({ isOpen, onClose, onAddEvent }) => {
     const [title, setTitle] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
+    const [startTime, setStartTime] = useState('09:00');
+    const [endTime, setEndTime] = useState('10:00');
     const [type, setType] = useState<CalendarEventType>('personal');
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -22,19 +24,31 @@ const AddEventModal: React.FC<AddEventModalProps> = ({ isOpen, onClose, onAddEve
             return;
         }
         
-        const start = new Date(date);
-        start.setHours(9, 0, 0); // Default start time to 9 AM
+        const [startHour, startMinute] = startTime.split(':').map(Number);
+        const startDate = new Date(`${date}T00:00:00`);
+        startDate.setHours(startHour, startMinute);
+
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+        const endDate = new Date(`${date}T00:00:00`);
+        endDate.setHours(endHour, endMinute);
+
+        if (endDate <= startDate) {
+            alert('End time must be after start time.');
+            return;
+        }
         
         onAddEvent({
             title,
-            start: start.toISOString(),
-            end: start.toISOString(), // For simplicity, end time is same as start
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
             type,
         });
 
         // Reset form
         setTitle('');
         setDate(new Date().toISOString().split('T')[0]);
+        setStartTime('09:00');
+        setEndTime('10:00');
         setType('personal');
     };
     
@@ -60,6 +74,24 @@ const AddEventModal: React.FC<AddEventModalProps> = ({ isOpen, onClose, onAddEve
                     onChange={e => setDate(e.target.value)}
                     required
                 />
+                 <div className="grid grid-cols-2 gap-4">
+                    <Input
+                        label="Start Time"
+                        id="event-start-time"
+                        type="time"
+                        value={startTime}
+                        onChange={e => setStartTime(e.target.value)}
+                        required
+                    />
+                    <Input
+                        label="End Time"
+                        id="event-end-time"
+                        type="time"
+                        value={endTime}
+                        onChange={e => setEndTime(e.target.value)}
+                        required
+                    />
+                </div>
                  <div>
                     <label htmlFor="event-type" className="block text-sm font-bold font-heading text-slate-700 mb-1">
                         Event Type
